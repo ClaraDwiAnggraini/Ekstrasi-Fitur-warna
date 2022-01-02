@@ -1,0 +1,149 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import cv2
+import glob
+#Kode ini untuk sample dengan background gelap
+
+path = glob.glob(r"C:\Users\asus\Documents\anacondaa\TA bismillah\destruktif\Semua\*.JPG")
+data2 = []
+for n in path:
+    img = cv2.imread(n)
+
+    #Resize image
+    scale_percent = 30 # percent of original size
+    width = int(img.shape[1] * scale_percent / 100)
+    height = int(img.shape[0] * scale_percent / 100)
+    dim = (width, height)
+    img_resize = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
+
+    
+    
+    #Convert color space
+    img_RGB = cv2.cvtColor(img_resize, cv2.COLOR_BGR2RGB)  #Matplot lib expects img in RGB format but OpenCV provides it in BGR.
+    img_gray = cv2.cvtColor(img_resize, cv2.COLOR_BGR2GRAY)
+    img_Lab = cv2.cvtColor(img_resize, cv2.COLOR_RGB2Lab)
+    img_HSV = cv2.cvtColor(img_resize, cv2.COLOR_RGB2HSV)
+    #Segmentation of the sample using thresholding / Otsu
+    th = 50
+    max_val = 255
+    th_val, img_th = cv2.threshold(img_gray,th,max_val,cv2.THRESH_BINARY)
+    # invert
+    img_th_inv = cv2.bitwise_not(img_th)
+   
+   
+    #Border removal
+    #Border removal
+    # add 1 pixel white border all around
+    padx = cv2.copyMakeBorder(img_th, 1,1,1,1, cv2.BORDER_CONSTANT, value=255)
+    hx, wx = padx.shape
+    # create zeros mask 2 pixels larger in each dimension
+    maskx = np.zeros([hx + 2, wx + 2], np.uint8)
+    # floodfill outer white border with black
+    img_rem_bor = cv2.floodFill(padx, maskx, (0,0), 0, (5), (0), flags=8)[1]
+    # remove border
+    img_rem_bor2 = img_rem_bor[1:hx-1, 1:wx-1]
+    
+    #Cleaning
+    # Copy the thresholded image.
+    im_floodfill = img_rem_bor2.copy()
+
+    # Mask used to flood filling.
+    # Notice the size needs to be 2 pixels than the image.
+    h, w = img_rem_bor2.shape[:2]
+    mask = np.zeros((h+2, w+2), np.uint8)
+
+    # Floodfill from point (0, 0)
+    cv2.floodFill(im_floodfill, mask, (0,0), 255);
+
+    # Invert floodfilled image
+    im_floodfill_inv = cv2.bitwise_not(im_floodfill)
+
+    # Combine the two images to get the foreground.
+    im_out = img_rem_bor2 | im_floodfill_inv
+
+    # Taking a matrix of size 5 as the kernel
+    kernel = np.ones((5,5), np.uint8)
+
+    # The first parameter is the original image,
+    # kernel is the matrix with which image is
+    # convolved and third parameter is the number
+    # of iterations, which will determine how much
+    # you want to erode/dilate a given image.
+    img_erosion1 = cv2.erode(im_out, kernel, iterations=2)
+    img_dilation1 = cv2.dilate(img_erosion1, kernel, iterations=2)
+
+    
+    # Remove small area
+    # find connected components (pre)
+    # find connected components (pre)
+    connectivity = 8
+    nb_componentsx, outputx, statsx, centroidsx = cv2.connectedComponentsWithStats(img_dilation1, connectivity, cv2.CV_32S)
+    sizesx = statsx[1:, -1]; nb_componentsx = nb_componentsx - 1
+    min_size = 250 #threshhold value for objects in scene
+
+    #your answer image
+    img_rem_small = np.zeros((img_dilation1.shape), np.uint8)
+    #for every component in the image, you keep it only if it's above min_size
+    for i in range(0, nb_componentsx):
+        if sizesx[i] >= min_size:
+            img_rem_small[outputx == i + 1] = 255
+    
+    # find connected components
+    # find connected components
+    connectivity = 8
+    nb_components, output, stats, centroids = cv2.connectedComponentsWithStats(img_rem_small, connectivity, cv2.CV_32S)
+    sizes = stats[1:, -1]; nb_components = nb_components - 1
+    min_size = 250 #threshhold value for objects in scene
+    img_box = np.zeros((img_RGB.shape), np.uint8)
+    for i in range(0, nb_componentsx):
+        # use if sizes[i] >= min_size: to identify your objects
+        color = np.random.randint(255,size=3)
+        # draw the bounding rectangele around each object
+        cv2.rectangle(img_box, (stats[i][0],stats[i][1]),(stats[i][0]+stats[i][2],stats[i][1]+stats[i][3]), (0,255,0), 2)
+        img_box[output == i + 1] = color
+    
+                
+    # extract color features
+
+    for i in range(1, nb_components+1):
+    
+    # use if sizes[i] >= min_size: to identify your objects
+    # cropped1 = img_box[(stats[i][1]-5):(stats[i][1]+stats[i][3]+5), (stats[i][0]-5):(stats[i][0]+stats[i][2]+5)] 
+        cropped2 = img_RGB[(stats[i][1]-5):(stats[i][1]+stats[i][3]+5), (stats[i][0]-5):(stats[i][0]+stats[i][2]+5)]
+        cropped2gray = cv2.cvtColor(cropped2, cv2.COLOR_BGR2GRAY)
+        ret2,img_bin2 = cv2.threshold(cropped2gray,th,max_val,cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        img_bin2_inv = cv2.bitwise_not(img_bin2)
+    
+        cropped3 = img_Lab[(stats[i][1]-5):(stats[i][1]+stats[i][3]+5), (stats[i][0]-5):(stats[i][0]+stats[i][2]+5)]
+        cropped4 = img_HSV[(stats[i][1]-5):(stats[i][1]+stats[i][3]+5), (stats[i][0]-5):(stats[i][0]+stats[i][2]+5)]  
+    
+    ## find the nozero regions in the erode
+    imask2 = img_bin2_inv>0
+
+    ## create a Mat like pictureRaw
+    canvas = np.full_like(cropped2, np.array([0,0,0]), dtype=np.uint8)
+    canvas2 = np.full_like(cropped3, np.array([0,0,0]), dtype=np.uint8)
+    canvas3 = np.full_like(cropped4, np.array([0,0,0]), dtype=np.uint8)
+    
+    ## set mask 
+    canvas[imask2] = cropped2[imask2]
+    channels_mean = cv2.mean(canvas)
+    channels = np.array([(channels_mean[0], channels_mean[1], channels_mean[2])])
+    
+    canvas2[imask2] = cropped3[imask2]
+    channels_meanLab = cv2.mean(canvas2)
+    channelsLab = np.array([(channels_meanLab[0], channels_meanLab[1], channels_meanLab[2])])
+       
+    canvas3[imask2] = cropped3[imask2]
+    channels_meanLHSV = cv2.mean(canvas3)
+    channelsHSV = np.array([(channels_meanLab[0], channels_meanLab[1], channels_meanLab[2])])
+    
+    channelstotal = np.c_[channels, channelsLab, channelsHSV]
+    
+    data2.extend(channelstotal)
+    df = pd.DataFrame(data2)
+        
+    df.columns =['R_ave', 'G_ave', 'B_ave', 'L_ave', 'a_ave', 'b_ave', 'H_ave', "S_ave", 'V_ave']
+df
+df.to_excel("datadestruktif.xlsx") 
