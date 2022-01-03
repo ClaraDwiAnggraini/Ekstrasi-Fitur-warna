@@ -1,0 +1,105 @@
+## Get The Data
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler, StandardScaler,LabelEncoder
+from sklearn.model_selection import train_test_split
+import seaborn as sns
+from scipy import stats
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
+from sklearn import svm
+from sklearn.neural_network import MLPClassifier
+from sklearn.metrics import classification_report, confusion_matrix
+
+# Keras ANN
+from tensorflow.keras import layers,metrics,optimizers
+from tensorflow.keras import Sequential
+from tensorflow.keras.layers import Conv2D, Flatten, Dense
+
+df = pd.read_excel(r"C:\Users\asus\Documents\anacondaa\TA bismillah\data\Destruktif\data klasifikasi 1\dataset labeling.xlsx", engine = 'openpyxl')
+df.head(2)
+df.shape
+df.info()
+df2= df.drop(columns=['Pixel'])
+
+y = df2['Kategori'].values
+X = df2.drop(columns=['Kategori'])
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, shuffle=True)
+
+ss = StandardScaler()
+
+#Scaling data train (fit and transform)
+X_train_SS = ss.fit_transform(X_train)
+
+#Scaling data test (transform only using scaler from data train)
+X_test_SS = ss.transform(X_test)
+
+X_train
+y_train
+
+from tensorflow.keras.callbacks import ModelCheckpoint
+from tensorflow.keras.models import load_model
+#Filepath = 'best_model.hdf5'
+
+## Model Creation : Creating the Simple Multi Layered Perceptron Model with Numeric target (Regression Problem)
+
+# define and fit the final model
+INPUT_DIM = X_train_SS.shape[1]
+
+model_ann = Sequential()
+model_ann.add(layers.Dense(64, input_dim=INPUT_DIM, activation='relu', name='Hidden_layer_1')) 
+model_ann.add(layers.Dense(16, activation='relu', name='Hidden_layer_2'))
+#model_ann.add(layers.Dense(8, activation='relu'))
+#model_ann.add(layers.Dense(8, activation='relu'))
+model_ann.add(layers.Dense(1, activation='sigmoid',name='Output_Layer')) ## --> Regression Target
+
+## Model Compiling : Using Adam Optimization with 0.005 Learning Rate
+opt=optimizers.Adam(learning_rate=0.002)
+model_ann.compile(loss='binary_crossentropy', optimizer=opt,
+                 metrics = ['BinaryAccuracy'])
+
+## Model Description (architecture)
+from tensorflow import keras
+keras.utils.plot_model(model_ann, show_shapes=True)
+## Split The Train data to get The Data Validation
+X_tr, X_val_SS, y_tr, y_val = train_test_split(
+    X_train_SS, y_train, test_size=0.2, random_state=42)
+    
+    Filepath = 'model_ann.hdf5'
+checkpoint = ModelCheckpoint(Filepath, monitor='val_binary_accuracy', verbose=1, save_best_only=True)
+callbacks_list = [checkpoint]
+
+epoch_hist_val = model_ann.fit(X_train_SS, y_train, epochs=100, validation_data=(X_val_SS,y_val),
+                          verbose=1, batch_size=15,callbacks=callbacks_list)
+                          
+                          data_eval = pd.DataFrame(epoch_hist_val.history)
+# data_eval['benchmark'] = 10
+data_eval[['BinaryAccuracy','val_BinaryAccuracy']].plot(figsize=(8,6), fontsize='x-large')
+plt.xlabel('Epoch', fontsize='x-large')
+plt.ylabel('Training Accuracy / Validation Accuracy', fontsize='x-large')
+plt.legend(['Training Accuracy','Validation Accuracy'], loc='lower right', fontsize='x-large')
+
+data_eval = pd.DataFrame(epoch_hist_val.history)
+# data_eval['benchmark'] = 10
+data_eval[['loss','val_loss']].plot(figsize=(8,6), fontsize='x-large')
+plt.xlabel('Epoch', fontsize='x-large')
+plt.ylabel('Training Loss / Validation Loss', fontsize='x-large')
+plt.legend(['Training Loss','Validation Loss'], loc='upper right', fontsize='x-large')
+
+
+## Predict the data test with model which reach 70 epoch
+## where the model has val_mean_absolute_percentage_error = 11.79
+loss_value, acc_value = model_ann.evaluate(X_train_SS, y_train,
+                            batch_size=15)
+print('last training loss: ', loss_value)
+print('last training accuracy: ', acc_value)
+
+
+## Predict the data test with model which reach 70 epoch
+## where the model has val_mean_absolute_percentage_error = 11.79
+loss_value, acc_value = model_ann.evaluate(X_test_SS, y_test,
+                            batch_size=15)
+print('last training loss: ', loss_value)
+print('last training accuracy: ', acc_value)
